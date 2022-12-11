@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ibl.link.info.impl.InfoMapper">
+
+	<select id="selectLinkCycleHr" parameterType="hashmap" resultType="hashmap">
+		SELECT LINK_CYCLE_HR FROM TB_PROV_LINK_INFO WHERE LINK_YR = #{link_yr} and LINK_KND_CD = #{link_knd_cd}
+	</select>
+
+	<select id="selectLastExcnTime" parameterType="hashmap" resultType="hashmap">
+		SELECT EXCN_DT FROM tb_prov_link_hst WHERE link_hst_no = 
+		(SELECT max(to_number(link_hst_no)) FROM tb_prov_link_hst WHERE link_knd_Cd = #{link_knd_cd})
+	</select>
+
+	<select id="selectLastDataYmd" parameterType="hashmap" resultType="hashmap">
+		SELECT LINK_DAT_YMD FROM tb_prov_link_hst WHERE link_hst_no = 
+		(SELECT max(to_number(link_hst_no)) FROM tb_prov_link_hst WHERE link_knd_Cd = #{link_knd_cd}) 
+	</select>
+	
+	<select id="selectLastDataEndTime" parameterType="hashmap" resultType="hashmap">
+		SELECT LINK_DAT_END_TM FROM tb_prov_link_hst WHERE link_hst_no = 
+		(SELECT max(to_number(link_hst_no)) FROM tb_prov_link_hst WHERE link_knd_Cd = #{link_knd_cd}) 
+	</select>
+	
+	<select id="selectLinkHstNo" parameterType="hashmap" resultType="string">
+		select max(to_number(link_hst_no))+1 as link_hst_no from tb_prov_link_hst
+		<!--  where link_knd_Cd = #{link_knd_cd} -->
+	</select>
+				
+	<update id="increExcnCount" parameterType="hashmap"> 
+		UPDATE 
+			TB_PROV_LINK_HST 
+		SET 
+			EXCN_CNT = EXCN_CNT + 1		
+		WHERE 
+			LINK_HST_NO = #{linkHstNo}
+	</update>	
+	
+	<insert id="insertProvLinkHst" parameterType="hashmap"> 
+		<selectKey keyProperty="link_hst_no" resultType="string" order="BEFORE">
+		    SELECT NVL(MAX(TO_NUMBER(LINK_HST_NO)),0)+1 AS LINK_HST_NO
+		    FROM TB_PROV_LINK_HST
+		</selectKey>
+		INSERT INTO TB_PROV_LINK_HST
+		(
+			LINK_HST_NO
+			,LINK_CYCLE_HR
+			,LINK_KND_CD
+			,LINK_DAT_YMD
+			,LINK_DAT_BGIN_TM
+			,LINK_DAT_END_TM
+			,EXCN_DT
+			,EXCN_CNT
+			,SCS_YN
+		)
+		VALUES
+		(
+			#{link_hst_no}
+			, #{link_cycle_hr}
+			, #{link_knd_cd}
+			, #{link_dat_ymd}
+			, #{link_dat_bgin_tm}
+			, #{link_dat_end_tm}
+			, SYSDATE
+			, #{excn_cnt}
+			, #{scs_yn}	
+		)		
+	</insert>
+	
+	<insert id="insertProvLinkErrLog" parameterType="hashmap" useGeneratedKeys="false"> 
+		INSERT INTO TB_LINK_ERR_LOG
+		(
+			ERR_LOG_NO
+			,LINK_HST_NO
+			,ERR_KND_CD
+			,ERR_CN
+			, OCRN_DT
+		)
+		VALUES
+		(
+			(SELECT max(to_number(ERR_LOG_NO))+1 FROM TB_LINK_ERR_LOG)
+			, #{linkHstNo}
+			, #{err_knd_cd}
+			, #{err_cn}
+			, SYSDATE		
+		)		
+	</insert>
+	
+	<update id="mergeProvRowData" parameterType="hashmap">
+		MERGE INTO 
+			TB_PROV_ROW_DAT a 
+		USING 
+			(SELECT * FROM TB_PROV_ROW_DAT_TMPR) b
+		on(b.crt_Dt = a.crt_Dt AND b.crt_ymd = a.crt_ymd)
+		WHEN NOT MATCHED THEN 
+			INSERT ( a.msur_val, a.dvice_id, a.crt_ymd, a.crt_Dt) 
+				VALUES (b.msur_val, b.dvice_id, #{crt_ymd}, b.crt_Dt)			
+	</update>
+	
+	<delete id="deleteProvMergeData" parameterType="hashmap">
+		DELETE FROM TB_PROV_ROW_DAT_TMPR			
+	</delete>
+	
+	
+</mapper>

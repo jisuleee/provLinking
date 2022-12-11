@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- namespace 풀네임으로 써줘야 함  -->
+<mapper namespace="com.ibl.link.dbfunc.impl.DbFuncMapper">
+	
+	<update id="chgRowDataFuncCall" statementType = "CALLABLE" parameterType="hashmap"> 
+		{ CALL WATERCLUSTER.CHG_PROV_DATA_BULK(
+				#{link_dat_ymd, mode=IN, jdbcType=VARCHAR, javaType=string},
+				#{link_dat_bgin_tm, mode=IN, jdbcType=VARCHAR, javaType=string},
+				#{link_dat_end_tm, mode=IN, jdbcType=VARCHAR, javaType=string},
+				#{link_cycle_hr, mode=IN, jdbcType=VARCHAR, javaType=string},
+				#{save_date, mode=IN, jdbcType=VARCHAR, javaType=string}
+			)
+		}
+	</update>
+	
+	<update id="chgAddRowDataFuncCall" statementType = "CALLABLE" parameterType="hashmap"> 
+		{ CALL WATERCLUSTER.CHG_PROV_DATA_BULK_ADD(
+				#{link_dat_ymd, mode=IN, jdbcType=VARCHAR, javaType=string},
+				#{link_dat_bgin_tm, mode=IN, jdbcType=VARCHAR, javaType=string},
+				#{link_dat_end_tm, mode=IN, jdbcType=VARCHAR, javaType=string},
+				#{bgin_tm_rnk, mode=IN, jdbcType=VARCHAR, javaType=string},
+				#{link_cycle_hr, mode=IN, jdbcType=VARCHAR, javaType=string},
+				#{save_date, mode=IN, jdbcType=VARCHAR, javaType=string}
+			)
+		}
+	</update>
+</mapper>                            
