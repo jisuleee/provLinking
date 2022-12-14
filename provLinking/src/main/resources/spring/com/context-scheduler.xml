@@ -9,28 +9,28 @@
   	
     <!-- 연계- 호출+적재작업  --> 
 	<bean id="storeProvDataScheduler" class="org.springframework.scheduling.quartz.MethodInvokingJobDetailFactoryBean"> 
-		<property name = "targetObject" ref = "storeProvDataService"/> <!-- service명  -->
-		<property name = "targetMethod" value = "excnStoreProvRowData"/> <!-- sevice 내의  method명  -->
+		<property name = "targetObject" ref = "callAndStoreJob"/> <!-- service명  -->
+		<property name = "targetMethod" value = "excnCallAndStoreJob"/> <!-- sevice 내의  method명  -->
 		<property name = "concurrent" value = "false"/>
 	</bean>
 	
 	<!-- 트리거 정의 (호출+적재작업)  -->
 	<bean id="storeProvDataSchedulerTrigger" class="org.springframework.scheduling.quartz.CronTriggerFactoryBean">
 		<property name = "jobDetail" ref = "storeProvDataScheduler"/>
-		<property name = "cronExpression" value="0 0/10 * * * ?"/> <!-- 매일 새벽 4시에 진행  0 56 15 ? * * -->
+		<property name = "cronExpression" value="0 0/1 * * * ?"/> <!-- 매일 새벽 4시에 진행  0 56 15 ? * * -->
 	</bean> 
 	
 	<!-- 연계-변환작업  --> 
 	<bean id="chgProvDataScheduler" class="org.springframework.scheduling.quartz.MethodInvokingJobDetailFactoryBean"> 
-		<property name = "targetObject" ref = "chgProvDataService"/> <!-- service명  -->
-		<property name = "targetMethod" value = "excnChgProvRowData"/> <!-- sevice 내의  method명  -->
+		<property name = "targetObject" ref = "chgJob"/> <!-- service명  -->
+		<property name = "targetMethod" value = "excnChgJob"/> <!-- sevice 내의  method명  -->
 		<property name = "concurrent" value = "false"/>
 	</bean>
 	
 	<!-- 트리거 정의 (변환작업)  -->
 	<bean id="chgProvDataSchedulerTrigger" class="org.springframework.scheduling.quartz.CronTriggerFactoryBean">
 		<property name = "jobDetail" ref = "chgProvDataScheduler"/>
-		<property name = "cronExpression" value="0 0/30 * * * ?"/> <!-- 매일 새벽 4시에 진행 0 0/2 * * * ?-->
+		<property name = "cronExpression" value="0 0/2 * * * ?"/> <!-- 매일 새벽 4시에 진행 0 0/2 * * * ?-->
 	</bean> 
 	
 	

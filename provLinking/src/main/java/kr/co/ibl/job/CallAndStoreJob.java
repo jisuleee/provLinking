@@ -183,17 +183,17 @@ public class CallAndStoreJob {
 		String linkType = "";
       	linkType = "1";
       	
-      	try {	           		            
+      	try {
 	        URL url = new URL(createProvApiUrl(linkDatBginTm, linkDatEndTm, linkDatYmd));        
 	        
 	        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
 	        conn.setRequestMethod("GET");
 	        conn.setRequestProperty("Content-type", "application/json");
 	        conn.setConnectTimeout(5000); // 연결 타임아웃 설정(5초) 
-	        System.out.println("Response code: " + conn.getResponseCode());	
+	        System.out.println("Response code: " + conn.getResponseCode());
 	        
 	        
-	        BufferedReader rd;     
+	        BufferedReader rd;
 	        
 	        if(conn.getResponseCode() >= 200 && conn.getResponseCode() <= 300) 
 	        { //conn.getResponseCode() >= 200 && conn.getResponseCode() <= 300  1>2
@@ -285,7 +285,7 @@ public class CallAndStoreJob {
         	   
         	   excnCallProvRowData(count);
         	   return "5"; //종료 신호(재귀함수 탈출)
-           }	           
+           }
     	   return "0"; 
 		}
 	}
@@ -305,7 +305,7 @@ public class CallAndStoreJob {
 	public List<HashMap<String,Object>> getProvDataList(String provStringData) throws ParseException,Exception {
 		
 		JSONObject provDataJson = parseStringToJson(provStringData);
-        JSONArray parse_items = (JSONArray) provDataJson.get("data");			
+        JSONArray parse_items = (JSONArray) provDataJson.get("data");
         List<HashMap<String,Object>> provDataList = new ArrayList<HashMap<String,Object>>();
 		
         
@@ -313,7 +313,7 @@ public class CallAndStoreJob {
 		for(int i=0; i<parse_items.size(); i++) { //parse_items
 			
 			HashMap<String,Object> provData = new HashMap<String,Object>();
-			JSONObject firstItem = (JSONObject)parse_items.get(i);	 //parse_items
+			JSONObject firstItem = (JSONObject)parse_items.get(i);//parse_items
 			
 			String dviceId = (String) firstItem.get("TAG_NAME");
 			String msurVal = Double.toString((Double)firstItem.get("XVALUE"));

@@ -15,7 +15,7 @@ import org.springframework.stereotype.Service;
 import kr.co.ibl.dbfunc.service.DbFuncService;
 import kr.co.ibl.info.service.InfoService;
 
-@Service("chgProvDataService")
+@Service("chgJob")
 public class ChgJob {
 	
 	@Autowired
@@ -106,27 +106,29 @@ public class ChgJob {
         return tomorrow;
 	}
 	
-	public String getLinkHstNo(String link_knd_cd) throws Exception{
-		return (String) infoService.selectLinkHstNo(link_knd_cd);
+	public void setLinkHstNo(String link_knd_cd) throws Exception{
+		this.linkHstNo = (String) infoService.selectLinkHstNo(link_knd_cd);
 	}
 	
     public void insertProvLinkHst(String linkKndCd, String successYn){
-        HashMap map = new HashMap();    
-        
-        String linkCycleHr = "";
-         map.put("link_cycle_hr", this.linkCycleHr); 
-         map.put("link_knd_cd", linkKndCd);
-         map.put("link_dat_ymd", this.linkDatYmd);
-         map.put("link_dat_bgin_tm", this.linkDatBginTm);
-         map.put("link_dat_end_tm", this.linkDatEndTm);
-         map.put("excn_cnt", "1");
-         map.put("scs_yn", successYn);
-        try{
-        	infoService.insertProvLinkHst(map);      
-        }
-        catch(Exception e){
-        	System.out.println("연계이력 등록 오류");
-        }
+	    try{
+	    	setLinkHstNo(linkKndCd);
+			HashMap map = new HashMap();    
+	    
+			String linkCycleHr = "";
+	        map.put("link_cycle_hr", this.linkCycleHr); 
+	        map.put("link_knd_cd", linkKndCd);
+	        map.put("link_dat_ymd", this.linkDatYmd);
+	        map.put("link_dat_bgin_tm", this.linkDatBginTm);
+	        map.put("link_dat_end_tm", this.linkDatEndTm);
+	        map.put("excn_cnt", "1");
+	        map.put("scs_yn", successYn);
+	
+	        infoService.insertProvLinkHst(map);      
+	    }
+	    catch(Exception e){
+	    	System.out.println("(주기연계 변환)연계이력 등록 오류");
+	    }
     }
     
     
@@ -144,7 +146,7 @@ public class ChgJob {
        		infoService.insertProvLinkErrLog(map);      
        }
        catch(Exception e){
-       		System.out.println("연계이력 등록 오류");
+       		System.out.println("(주기연계 변환)에러정보 등록 오류");
        }
     }
     
@@ -162,7 +164,7 @@ public class ChgJob {
 	}
 		
 
-	public void excnChgProvRowData(){ //excnChgProvRowData()  callChgRowDataFunc
+	public void excnChgJob(){ //excnChgProvRowData()  callChgRowDataFunc
 		
 		String linkDatYmd = "";
 		String linkDatBginTm ="";
@@ -223,19 +225,10 @@ public class ChgJob {
 		}
 		//db프로시저에서 잡지못하는 에러 => try-catch로 넘길수있도록 //테이블 notnull 설정같은거 여기서받음
 	    catch(SQLException e){     
-		     try {
-				this.linkHstNo = getLinkHstNo("3");
-			} catch (Exception e1) {
-				
-			}	
 	         insertProvLinkHst("3", "N");   
 	         insertLinkErrLog(linkHstNo,"2",String.valueOf(e.getMessage()));      
 	    }	      
 	    catch(Exception e){     
-		     try {
-				this.linkHstNo = getLinkHstNo("3");
-			} catch (Exception e1) {
-			}
 	         insertProvLinkHst("3", "N");   
 	         insertLinkErrLog(linkHstNo,"4",String.valueOf(e.getMessage()));      
 	    }		
