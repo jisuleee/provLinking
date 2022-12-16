@@ -30,25 +30,28 @@ public class ChgJob {
 	String linkDatYmd = "";
 	String linkDatBginTm = "";
 	String linkDatEndTm = "";
+	String nowTmDate = "";
 	
 	
 	//변환작업 실행시간 여부 확인	(변환작업은 60분주기로 고정)
-	public boolean checkChgExcnTimeYN(String linkCycleHr, Date lastExcnTm){   //checkChgTimeYN  checkExecTimeYN
+	public boolean checkChgExcnTimeYN(String linkCycleHr, Date lastExcnTm) throws ParseException{   //checkChgTimeYN  checkExecTimeYN
 		
 		SimpleDateFormat sdformat = new SimpleDateFormat("yyyy-MM-dd HH:mm"); //HH:mm:ss
 		Calendar cal = Calendar.getInstance();
+		Date lastExcnTmNoSs = sdformat.parse(lastExcnTm.toString());
 		cal.setTime(lastExcnTm);
 		
 		cal.add(Calendar.MINUTE, Integer.parseInt(linkCycleHr.trim())); 
-		String linkExcnTmDate = sdformat.format(cal.getTime());
+		String lastExcnTmDate = sdformat.format(cal.getTime());
 
 		Date nowDate = new Date();
 		Calendar cal2 = Calendar.getInstance();
 		cal2.setTime(nowDate);
 		
 		String nowTmDate = sdformat.format(cal2.getTime());
+		this.nowTmDate = nowTmDate;
 		
-		if(linkExcnTmDate.equals(nowTmDate)){ //이거 ss단위까지 맞아야함; 수정필요 
+		if(lastExcnTmDate.equals(nowTmDate)){ //이거 ss단위까지 맞아야함; 수정필요 
 			return true;
 		}else{
 			return false;
@@ -197,14 +200,14 @@ public class ChgJob {
 	        
 					
 			//현재는 테스트를 위해 false! 설정
-			if(!checkChgExcnTimeYN(linkCycleHr, lastExcnTm)){
+			if(checkChgExcnTimeYN(linkCycleHr, lastExcnTm)){
 				
 				if(Integer.parseInt(linkDatBginTm.replace(":", "")) > Integer.parseInt(linkDatEndTm.replace(":", ""))){
 		            String tempLinkDatEndTm = this.linkDatEndTm;
 		            
 					for(int i=0; i<2; i++){
 						if(i==0){
-		                    this.linkDatEndTm = "23:59:99";   
+		                    this.linkDatEndTm = "23:59:59";   
 		                    callChgRowDataDBFunc();  
 						}
 						if(i==1){

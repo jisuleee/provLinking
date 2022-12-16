@@ -1,14 +1,20 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.ibl.link.info.impl.InfoMapper">
+<mapper namespace="kr.co.ibl.info.impl.InfoMapper">
 
 	<select id="selectLinkCycleHr" parameterType="hashmap" resultType="hashmap">
 		SELECT LINK_CYCLE_HR FROM TB_PROV_LINK_INFO WHERE LINK_YR = #{link_yr} and LINK_KND_CD = #{link_knd_cd}
 	</select>
 
 	<select id="selectLastExcnTime" parameterType="hashmap" resultType="hashmap">
-		SELECT EXCN_DT FROM tb_prov_link_hst WHERE link_hst_no = 
-		(SELECT max(to_number(link_hst_no)) FROM tb_prov_link_hst WHERE link_knd_Cd = #{link_knd_cd})
+		SELECT 
+			EXCN_DT 
+		FROM tb_prov_link_hst 
+		WHERE 
+			link_hst_no = 
+			(SELECT max(to_number(link_hst_no)) FROM tb_prov_link_hst WHERE link_knd_Cd = #{link_knd_cd}
+				AND LINK_DAT_BGIN_TM != '00:00:00'
+			)
 	</select>
 
 	<select id="selectLastDataYmd" parameterType="hashmap" resultType="hashmap">
@@ -60,7 +66,7 @@
 			, #{link_dat_ymd}
 			, #{link_dat_bgin_tm}
 			, #{link_dat_end_tm}
-			, SYSDATE
+			, (select TO_DATE(#{excn_dt},'YYYY-MM-DD HH24:MI:SS') FROM dual)
 			, #{excn_cnt}
 			, #{scs_yn}	
 		)		
