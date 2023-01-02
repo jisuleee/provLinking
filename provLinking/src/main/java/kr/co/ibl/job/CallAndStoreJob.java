@@ -25,6 +25,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.support.PropertiesLoaderUtils;
@@ -35,6 +37,8 @@ import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
+import kr.co.ibl.HomeController;
 import kr.co.ibl.dbfunc.service.DbFuncService;
 import kr.co.ibl.info.service.InfoService;
 import com.ibleaders.utility.ib_json.JSONArray;
@@ -45,7 +49,7 @@ import com.ibleaders.utility.ib_json.parser.JSONParser;
 public class CallAndStoreJob {
 
 	@Autowired
-	private InfoService infoService;
+	private InfoService infoService; private static final Logger logger = LoggerFactory.getLogger(CallAndStoreJob.class);
 	
 	@Autowired
 	private DbFuncService dbFuncService;
@@ -161,13 +165,12 @@ public class CallAndStoreJob {
 	        map.put("scs_yn", successYn);
 	        infoService.insertProvLinkHst(map);      
     	}
-    	catch(Exception e){
-    		String message = e.getMessage();
-		    if(message.length()>300){
-			   message = message.substring(0,300);
-		    }
-    		System.out.println("(주기연계 호출적재)이력정보 등록에러: " + message);
-    	}
+        catch(SQLException e){
+     	   logger.debug("[CallAndStoreJob insertProvLinkHst()] SQL Exception 발생");    	   
+        }
+        catch(Exception e){
+     	   logger.debug("[CallAndStoreJob insertProvLinkHst()] Exception 발생");
+ 		}
     }
 	   
     public void insertLinkErrLog(String linkHstNo,String errKndCd, String message){
@@ -182,9 +185,13 @@ public class CallAndStoreJob {
        map.put("err_cn", message);
        try{
     	   infoService.insertProvLinkErrLog(map);
-       }catch(Exception e){
-   			System.out.println("(주기연계 호출적재)실패에러정보 등록에러 : "+ message);
        }
+       catch(SQLException e){
+    	   logger.debug("[CallAndStoreJob insertLinkErrLog()] SQLException 발생");    	    	   
+       }
+       catch(Exception e){
+    	   logger.debug("[CallAndStoreJob insertLinkErrLog()] Exception 발생");    	
+	   }
     }
 	   
    
@@ -192,7 +199,7 @@ public class CallAndStoreJob {
 	    org.springframework.core.io.Resource resource = new ClassPathResource("/properties/globals.properties");
         Properties props = PropertiesLoaderUtils.loadProperties(resource);		
 		
-        //http://localhost:9094/provData/req.do?linkDatYmd=2022-02-02&linkDatBginTm=12:00:00&linkDatEndTm=13:00:00	
+        //http://localhost:9094/middleProvApi/req.do?linkDatYmd=2022-02-02&linkDatBginTm=12:00:00&linkDatEndTm=13:00:00	
 		StringBuilder urlBuilder = new StringBuilder(props.getProperty("Globals.MiddleApiUrl")); 
         urlBuilder.append(URLEncoder.encode("linkDatYmd","UTF-8") + "=" + URLEncoder.encode(this.linkDatYmd, "UTF-8"));
         urlBuilder.append("&" + URLEncoder.encode("linkDatBginTm","UTF-8") + "=" + URLEncoder.encode(this.linkDatBginTm, "UTF-8"));
@@ -206,18 +213,19 @@ public class CallAndStoreJob {
       	linkType = "1";
         String responseMsg = ""; 
         
+        BufferedReader rd = null;
+        HttpURLConnection conn = null;
+        
       	try{
 	        URL url = new URL(createProvApiUrl(this.linkDatBginTm, this.linkDatEndTm, this.linkDatYmd));        
 	        
-	        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+	        conn = (HttpURLConnection) url.openConnection();
 	        conn.setRequestMethod("GET");
 	        conn.setRequestProperty("Content-type", "application/json");
 	        conn.setConnectTimeout(5000); // 연결 타임아웃 설정(5초) 
 	        int responseCode = conn.getResponseCode();
 	        System.out.println("Response code: " + responseCode);
 	        
-	        
-	        BufferedReader rd;
 	        
 	        if(responseCode >= 200 && responseCode <= 300) 
 	        {		        
@@ -280,8 +288,6 @@ public class CallAndStoreJob {
 	        	    return "0";
 		        }
 		        
-		        rd.close();
-		        conn.disconnect();
 			  return apiString; 
 
 	        }else {
@@ -309,13 +315,36 @@ public class CallAndStoreJob {
 	           
 	        }	
 		}catch(ConnectException e){
+
 			//통신연결에 실패한 경우 
         	//에러이력 추가
         	if(count == 1){
                 linkType = "1"; //1-호출 2-적재 3-변환
         		insertProvLinkHst(linkType,"N");
         	}
-            insertLinkErrLog(linkHstNo,"1",e.getMessage());
+            insertLinkErrLog(linkHstNo,"1","[CallAndStoreJob excnCallProvRowData()] ConnectException 발생");
+            
+            if(count != 1) //재귀함수를 탄 경우
+            {
+            	infoService.increExcnCount(linkHstNo); //or linkHstNo
+            }
+
+           //다섯번동안 재시도 (재귀함수)
+           if(count != 5){
+        	   count++;
+        	   excnCallProvRowData(count);
+        	   return "5"; //종료 신호(재귀함수 탈출)
+           }
+    	   return "0"; 
+		}catch(Exception e){
+
+			//통신연결에 실패한 경우 
+        	//에러이력 추가
+        	if(count == 1){
+                linkType = "1"; //1-호출 2-적재 3-변환
+        		insertProvLinkHst(linkType,"N");
+        	}
+            insertLinkErrLog(linkHstNo,"1","[CallAndStoreJob excnCallProvRowData()] Exception 발생");
             
             if(count != 1) //재귀함수를 탄 경우
             {
@@ -330,6 +359,11 @@ public class CallAndStoreJob {
            }
     	   return "0"; 
 		}
+      	finally{
+    		if (rd != null) try {rd.close();}catch(IOException ex){	logger.error("CallAndStoreJob rd close 이슈발생!!"); }
+            if (conn != null) try {conn.disconnect();} catch(NullPointerException ex){	logger.error("CallAndStoreJob conn disconnect 이슈발생!!"); }
+      	}
+
 	}
 	
 	
@@ -385,20 +419,24 @@ public class CallAndStoreJob {
 	public boolean storeProvRowDataToDB(List<HashMap<String,Object>> provDataList) throws SQLException, Exception{   
 	  
 	//임시 제거(실증화 운영서버 반영 전)		
-//    if(provDataList.size() == 0){
-//    	 throw new StringIndexOutOfBoundsException(); 
-//    }
+    //if(provDataList.size() == 0){
+    //	 throw new StringIndexOutOfBoundsException(); 
+    //}
 
-      Connection con = null;
-      PreparedStatement pstmt = null ;
-      
-      String sql = "INSERT INTO TB_PROV_DAT_2022 (DVICE_ID, MSUR_VAL, CRT_DT, CRT_YMD ) VALUES (?, ?, ?, ?)";
-      
 	  org.springframework.core.io.Resource resource = new ClassPathResource("/properties/globals.properties");
       Properties props = PropertiesLoaderUtils.loadProperties(resource);
+      String dbUrl = props.getProperty("Globals.Url");
+      String dbUser = props.getProperty("Globals.UserName");
+      String dbPass = props.getProperty("Globals.Password");
+
+      String sql = "INSERT INTO TB_PROV_DAT_2022 (DVICE_ID, MSUR_VAL, CRT_DT, CRT_YMD ) VALUES (?, ?, ?, ?)";
       
       Class.forName("oracle.jdbc.OracleDriver"); 
-      con = DriverManager.getConnection(props.getProperty("Globals.Url"), props.getProperty("Globals.UserName"), props.getProperty("Globals.Password"));
+      
+      Connection con = null;
+      PreparedStatement pstmt = null ;
+  
+      con = DriverManager.getConnection(dbUrl, dbUser, dbPass);
       con.setAutoCommit(false);  // 자동 커밋 해제
      
          pstmt = con.prepareStatement(sql) ;
@@ -440,18 +478,19 @@ public class CallAndStoreJob {
          try {
             con.rollback() ;
          } catch (SQLException e1) {
-               e1.printStackTrace();
+        	 logger.debug("CallAndStoreJob storeProvRowDataToDB - conn rollback SQLException 발생");
+        	 throw new SQLException(); 
          }           
          finally{
-            if (pstmt != null) try {pstmt.close();pstmt = null;} catch(SQLException ex){}
-            if (con != null) try {con.close();con = null;} catch(SQLException ex){}
+            if (pstmt != null) try {pstmt.close();pstmt = null;} catch(SQLException ex){ logger.debug("CallAndStoreJob storeProvRowDataToDB() - pstmt close SQLException 발생"); throw new SQLException(); }
+            if (con != null) try {con.close();con = null;} catch(SQLException ex){ logger.debug("CallAndStoreJob storeProvRowDataToDB() - con close SQLException 발생"); throw new SQLException(); }
          }
       return true;
 	}	
 
 	//전체 호출+적재 실행 메인 메소드
 	public void excnCallAndStoreJob(){
-
+		
 		String linkDatYmd = "";
 		String linkDatBginTm ="";
 		String linkDatEndTm = "";		
@@ -482,7 +521,7 @@ public class CallAndStoreJob {
 			
 			//설정한 연계주기에 따라 현재 실행하는 시간인지 체크
 			if(checkLinkExecTimeYN(linkCycleHr, lastExcnTm)){
-	
+
 				//만약 연계주기를 더했을 때 자정을 넘겼다면 ★★
 				if(Integer.parseInt(linkDatBginTm.replace(":", "")) > Integer.parseInt(linkDatEndTm.replace(":", ""))){ //3 대신 endTm 문자열화 ★★★
 		            String tempLinkDatEndTm = this.linkDatEndTm;
@@ -499,20 +538,20 @@ public class CallAndStoreJob {
 							        //this.linkHstNo2 = infoService.selectLinkHstNo("2"); //전역변수용 
 							        insertProvLinkHst("2", "Y");
 								}
-								catch(RuntimeException e){
+								catch(StringIndexOutOfBoundsException e){
 							    	 //this.linkHstNo2 = infoService.selectLinkHstNo("2"); 
 							         insertProvLinkHst("2", "N"); 
-							         insertLinkErrLog(this.linkHstNo2,"3",String.valueOf("받아온 데이터에 값이 없습니다"));													
+							         insertLinkErrLog(this.linkHstNo2,"3",String.valueOf("CallAndStoreJob excnCallAndStoreJob() 분기점, 받아온 데이터에 값이 없습니다"));													
 								}catch(Exception e){
 							    	 //this.linkHstNo2 = infoService.selectLinkHstNo("2"); 
 							         insertProvLinkHst("2", "N"); 
-							         insertLinkErrLog(this.linkHstNo2,"4",String.valueOf(e.getMessage()));
+							         insertLinkErrLog(this.linkHstNo2,"4","CallAndStoreJob excnCallAndStoreJob() 분기점, Exception 발생");
 								}
 							}
 						}
 						if(i==1){
 							
-			                this.linkDatBginTm = "00:00:00";
+			                this.linkDatBginTm = "00:00:59";
 			                this.linkDatEndTm = tempLinkDatEndTm;
 			                this.linkDatYmd = getTomorrowYmd(this.linkDatYmd);						
 							
@@ -544,19 +583,19 @@ public class CallAndStoreJob {
 			}
 		}catch(SQLException e){
 	         insertProvLinkHst("2", "N"); 
-	         insertLinkErrLog(this.linkHstNo2,"2",String.valueOf(e.getMessage()));
+	         insertLinkErrLog(this.linkHstNo2,"2","CallAndStoreJob excnCallAndStoreJob() SQLException 발생 "); //+e.getMessage()
 		
 		}catch(ParseException e){
 	         insertProvLinkHst("2", "N"); 
-	         insertLinkErrLog(this.linkHstNo2,"3",String.valueOf(e.getMessage()));			
+	         insertLinkErrLog(this.linkHstNo2,"3","CallAndStoreJob excnCallAndStoreJob() ParseException 발생");			
 		}
 		catch(StringIndexOutOfBoundsException e){
 	         insertProvLinkHst("2", "N"); 
-	         insertLinkErrLog(this.linkHstNo2,"3",String.valueOf("받아온 데이터에 값이 없습니다"));					
+	         insertLinkErrLog(this.linkHstNo2,"3","CallAndStoreJob excnCallAndStoreJob(), 받아온 데이터에 값이 없습니다");					
 		}
 		catch(Exception e){
 	         insertProvLinkHst("2", "N"); 
-	         insertLinkErrLog(this.linkHstNo2,"4",String.valueOf(e.getMessage()));
+	         insertLinkErrLog(this.linkHstNo2,"4","CallAndStoreJob excnCallAndStoreJob() Exception 발생"); //+e.getMessage()
 		}
 	}	
 	

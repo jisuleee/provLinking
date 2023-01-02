@@ -9,6 +9,8 @@ import java.util.Calendar;
 import java.util.Date;
 import java.util.HashMap;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -19,7 +21,7 @@ import kr.co.ibl.info.service.InfoService;
 public class ChgJob {
 	
 	@Autowired
-	private InfoService infoService;
+	private InfoService infoService; private static final Logger logger = LoggerFactory.getLogger(ChgJob.class);
 	
 	@Autowired
 	private DbFuncService dbFuncService;
@@ -39,7 +41,7 @@ public class ChgJob {
 		SimpleDateFormat sdformat = new SimpleDateFormat("yyyy-MM-dd HH:mm"); //HH:mm:ss
 		Calendar cal = Calendar.getInstance();
 		Date lastExcnTmNoSs = sdformat.parse(lastExcnTm.toString());
-		cal.setTime(lastExcnTm);
+		cal.setTime(lastExcnTmNoSs);
 		
 		cal.add(Calendar.MINUTE, Integer.parseInt(linkCycleHr.trim())); 
 		String lastExcnTmDate = sdformat.format(cal.getTime());
@@ -49,9 +51,10 @@ public class ChgJob {
 		cal2.setTime(nowDate);
 		
 		String nowTmDate = sdformat.format(cal2.getTime());
-		this.nowTmDate = nowTmDate;
+//		this.nowTmDate = nowTmDate;
 		
 		if(lastExcnTmDate.equals(nowTmDate)){ //이거 ss단위까지 맞아야함; 수정필요 
+			this.nowTmDate = lastExcnTmDate; //이메소드안에서 시간이 걸려서 ..	
 			return true;
 		}else{
 			return false;
@@ -124,14 +127,18 @@ public class ChgJob {
 	        map.put("link_dat_ymd", this.linkDatYmd);
 	        map.put("link_dat_bgin_tm", this.linkDatBginTm);
 	        map.put("link_dat_end_tm", this.linkDatEndTm);
+	        map.put("excn_dt", this.nowTmDate);
 	        map.put("excn_cnt", "1");
 	        map.put("scs_yn", successYn);
 	
 	        infoService.insertProvLinkHst(map);      
 	    }
-	    catch(Exception e){
-	    	System.out.println("(주기연계 변환)연계이력 등록 오류");
-	    }
+        catch(SQLException e){
+      	   logger.error("[ChgJob insertProvLinkHst()] SQL Exception 발생");    	   
+         }
+         catch(Exception e){
+      	   logger.error("[ChgJob insertProvLinkHst()] Exception 발생");
+  		}
     }
     
     
@@ -148,9 +155,12 @@ public class ChgJob {
        try{
        		infoService.insertProvLinkErrLog(map);      
        }
-       catch(Exception e){
-       		System.out.println("(주기연계 변환)에러정보 등록 오류");
+       catch(SQLException e){
+    	   logger.error("[ChgJob insertLinkErrLog()] SQLException 발생");    	    	   
        }
+       catch(Exception e){
+    	   logger.error("[ChgJob insertLinkErrLog()] Exception 발생");    	
+	   }
     }
     
 	
@@ -211,7 +221,7 @@ public class ChgJob {
 		                    callChgRowDataDBFunc();  
 						}
 						if(i==1){
-			                this.linkDatBginTm = "00:00:00";
+			                this.linkDatBginTm = "00:00:59";
 			                this.linkDatEndTm = tempLinkDatEndTm;			
 			                this.linkDatYmd = getTomorrowYmd(this.linkDatYmd);
 			                
@@ -229,11 +239,11 @@ public class ChgJob {
 		//db프로시저에서 잡지못하는 에러 => try-catch로 넘길수있도록 //테이블 notnull 설정같은거 여기서받음
 	    catch(SQLException e){     
 	         insertProvLinkHst("3", "N");   
-	         insertLinkErrLog(linkHstNo,"2",String.valueOf(e.getMessage()));      
+	         insertLinkErrLog(linkHstNo,"2","ChgJob excnChgJob() SQLException 발생");      
 	    }	      
 	    catch(Exception e){     
 	         insertProvLinkHst("3", "N");   
-	         insertLinkErrLog(linkHstNo,"4",String.valueOf(e.getMessage()));      
+	         insertLinkErrLog(linkHstNo,"4","ChgJob excnChgJob() Exception 발생");      
 	    }		
 	}	
 
