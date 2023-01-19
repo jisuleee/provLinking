@@ -41,6 +41,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import kr.co.ibl.HomeController;
 import kr.co.ibl.dbfunc.service.DbFuncService;
 import kr.co.ibl.info.service.InfoService;
+import kr.co.ibl.util.EncryptUtil;
+
 import com.ibleaders.utility.ib_json.JSONArray;
 import com.ibleaders.utility.ib_json.JSONObject;
 import com.ibleaders.utility.ib_json.parser.JSONParser;
@@ -49,10 +51,13 @@ import com.ibleaders.utility.ib_json.parser.JSONParser;
 public class CallAndStoreJob {
 
 	@Autowired
-	private InfoService infoService; private static final Logger logger = LoggerFactory.getLogger(CallAndStoreJob.class);
+	private InfoService infoService; 
+	private static final Logger logger = LoggerFactory.getLogger(CallAndStoreJob.class);
 	
 	@Autowired
 	private DbFuncService dbFuncService;
+	
+    EncryptUtil aes256 = new EncryptUtil();
 	
 	String apiString = "";
 	public int count = 1; 
@@ -67,29 +72,44 @@ public class CallAndStoreJob {
 	
 	HashMap testMap = new HashMap();
 	
-	
 	//연계작업 실행시간 여부 확인
-	public boolean checkLinkExecTimeYN(String linkCycleHr, Date lastExcnTm) throws ParseException{ //checkLinkCycleYN checkLinkTimeYN checkExecTimeYN
-				
+	public boolean checkLinkExecTimeYN(String linkCycleHr, Date lastExcnTm) throws ParseException, Exception{ //checkLinkCycleYN checkLinkTimeYN checkExecTimeYN
+
 		SimpleDateFormat sdformat = new SimpleDateFormat("yyyy-MM-dd HH:mm"); //HH:mm:ss
-		Calendar cal = Calendar.getInstance();
+		Calendar lastExcnTmCal = Calendar.getInstance();
 		Date lastExcnTmNoSs = sdformat.parse(lastExcnTm.toString());
-		cal.setTime(lastExcnTmNoSs);
+		lastExcnTmCal.setTime(lastExcnTmNoSs);
 		
-		cal.add(Calendar.MINUTE, Integer.parseInt(linkCycleHr.trim())); 
-		String lastExcnTmDate = sdformat.format(cal.getTime());
+		lastExcnTmCal.add(Calendar.MINUTE, Integer.parseInt(linkCycleHr.trim())); 
+		String lastExcnTmDate = sdformat.format(lastExcnTmCal.getTime());
 
 		Date nowDate = new Date();
-		Calendar cal2 = Calendar.getInstance();
-		cal2.setTime(nowDate);
+		Calendar nowTmCal = Calendar.getInstance();
+		nowTmCal.setTime(nowDate);
 		
-		String nowTmDate = sdformat.format(cal2.getTime());
+		String nowTmDate = sdformat.format(nowTmCal.getTime());
 		this.nowTmDate = nowTmDate;
+		//System.out.println("날짜최신실행시간나오는거 + "+lastExcnTmDate +"지금은" +nowTmDate);
 		
-		if(lastExcnTmDate.equals(nowTmDate)){  
-			return true;
+		if(lastExcnTmCal.before(nowTmCal)&& !lastExcnTmDate.equals(nowTmDate)){
+			lastExcnTmCal.setTime(lastExcnTmNoSs);
+			this.linkCycleHr = getLastLinkCycleHr().trim();//연계이력 저장 위함
+			lastExcnTmCal.add(Calendar.MINUTE, Integer.parseInt(getLastLinkCycleHr().trim()));
+			lastExcnTmDate = sdformat.format(lastExcnTmCal.getTime());
+			
+			if(lastExcnTmDate.equals(nowTmDate)){ 
+				this.nowTmDate = lastExcnTmDate; 
+				return true;
+			}else{
+				return false;
+			}
 		}else{
-			return false;
+			if(lastExcnTmDate.equals(nowTmDate)){
+				this.nowTmDate = lastExcnTmDate;
+				return true;
+			}else{
+				return false;
+			}
 		}
 	}
 
@@ -98,6 +118,12 @@ public class CallAndStoreJob {
 		map1.put("link_knd_cd", "1");
 		map1.put("link_yr", this.linkDatYmd.substring(0,4));
 		return (String) infoService.selectLinkCycleHr(map1).get("LINK_CYCLE_HR");
+	}
+	
+	public String getLastLinkCycleHr() throws Exception{
+		HashMap map1 = new HashMap();
+		map1.put("link_knd_cd", "1");	
+		return (String) infoService.selectLastLinkCycleHr((String)map1.get("link_knd_cd")).get("LINK_CYCLE_HR");
 	}
 	
 	public Date getLastExcnTime() throws Exception{
@@ -166,10 +192,10 @@ public class CallAndStoreJob {
 	        infoService.insertProvLinkHst(map);      
     	}
         catch(SQLException e){
-     	   logger.debug("[CallAndStoreJob insertProvLinkHst()] SQL Exception 발생");    	   
+     	   logger.error("[CallAndStoreJob insertProvLinkHst()] SQL Exception 발생"+e.getMessage());    	   
         }
         catch(Exception e){
-     	   logger.debug("[CallAndStoreJob insertProvLinkHst()] Exception 발생");
+     	   logger.error("[CallAndStoreJob insertProvLinkHst()] Exception 발생"+e.getMessage());
  		}
     }
 	   
@@ -187,10 +213,10 @@ public class CallAndStoreJob {
     	   infoService.insertProvLinkErrLog(map);
        }
        catch(SQLException e){
-    	   logger.debug("[CallAndStoreJob insertLinkErrLog()] SQLException 발생");    	    	   
+    	   logger.error("[CallAndStoreJob insertLinkErrLog()] SQLException 발생"+e.getMessage());    	    	   
        }
        catch(Exception e){
-    	   logger.debug("[CallAndStoreJob insertLinkErrLog()] Exception 발생");    	
+    	   logger.error("[CallAndStoreJob insertLinkErrLog()] Exception 발생"+e.getMessage());    	
 	   }
     }
 	   
@@ -198,12 +224,13 @@ public class CallAndStoreJob {
 	public String createProvApiUrl(String linkDatBginTm, String linkDatEndTm, String linkDatYmd) throws IOException{				
 	    org.springframework.core.io.Resource resource = new ClassPathResource("/properties/globals.properties");
         Properties props = PropertiesLoaderUtils.loadProperties(resource);		
-		
-        //http://localhost:9094/middleProvApi/req.do?linkDatYmd=2022-02-02&linkDatBginTm=12:00:00&linkDatEndTm=13:00:00	
+        
+//      http://localhost:9094/middleProvApi/req.do?linkDatYmd=2022-02-02&linkDatBginTm=12:00:00&linkDatEndTm=13:00:00	
 		StringBuilder urlBuilder = new StringBuilder(props.getProperty("Globals.MiddleApiUrl")); 
         urlBuilder.append(URLEncoder.encode("linkDatYmd","UTF-8") + "=" + URLEncoder.encode(this.linkDatYmd, "UTF-8"));
         urlBuilder.append("&" + URLEncoder.encode("linkDatBginTm","UTF-8") + "=" + URLEncoder.encode(this.linkDatBginTm, "UTF-8"));
         urlBuilder.append("&" + URLEncoder.encode("linkDatEndTm","UTF-8") + "=" + URLEncoder.encode(this.linkDatEndTm, "UTF-8"));
+	
         
         return urlBuilder.toString().replace("%3A", ":"); //시간데이터에서 : 문자 치환
 	}
@@ -224,7 +251,7 @@ public class CallAndStoreJob {
 	        conn.setRequestProperty("Content-type", "application/json");
 	        conn.setConnectTimeout(5000); // 연결 타임아웃 설정(5초) 
 	        int responseCode = conn.getResponseCode();
-	        System.out.println("Response code: " + responseCode);
+//	        System.out.println("Response code: " + responseCode);
 	        
 	        
 	        if(responseCode >= 200 && responseCode <= 300) 
@@ -322,7 +349,7 @@ public class CallAndStoreJob {
                 linkType = "1"; //1-호출 2-적재 3-변환
         		insertProvLinkHst(linkType,"N");
         	}
-            insertLinkErrLog(linkHstNo,"1","[CallAndStoreJob excnCallProvRowData()] ConnectException 발생");
+            insertLinkErrLog(linkHstNo,"1","[CallAndStoreJob excnCallProvRowData()] ConnectException 발생"+e.getMessage());
             
             if(count != 1) //재귀함수를 탄 경우
             {
@@ -344,7 +371,7 @@ public class CallAndStoreJob {
                 linkType = "1"; //1-호출 2-적재 3-변환
         		insertProvLinkHst(linkType,"N");
         	}
-            insertLinkErrLog(linkHstNo,"1","[CallAndStoreJob excnCallProvRowData()] Exception 발생");
+            insertLinkErrLog(linkHstNo,"1","[CallAndStoreJob excnCallProvRowData()] Exception 발생"+e.getMessage());
             
             if(count != 1) //재귀함수를 탄 경우
             {
@@ -426,10 +453,12 @@ public class CallAndStoreJob {
 	  org.springframework.core.io.Resource resource = new ClassPathResource("/properties/globals.properties");
       Properties props = PropertiesLoaderUtils.loadProperties(resource);
       String dbUrl = props.getProperty("Globals.Url");
-      String dbUser = props.getProperty("Globals.UserName");
-      String dbPass = props.getProperty("Globals.Password");
-
-      String sql = "INSERT INTO TB_PROV_DAT_2022 (DVICE_ID, MSUR_VAL, CRT_DT, CRT_YMD ) VALUES (?, ?, ?, ?)";
+      String dbUser = props.getProperty("Globals.UserName");     
+      String dbPass = aes256.decrypt(props.getProperty("Globals.PasswordRSAEncrypt"));
+      
+//    String dbPass = props.getProperty("Globals.Password");
+//    TB_PROV_DAT_2022
+      String sql = "INSERT INTO TB_PROV_RAW_DAT (DVICE_ID, MSUR_VAL, CRT_DT, CRT_YMD ) VALUES (?, ?, ?, ?)";
       
       Class.forName("oracle.jdbc.OracleDriver"); 
       
@@ -478,12 +507,12 @@ public class CallAndStoreJob {
          try {
             con.rollback() ;
          } catch (SQLException e1) {
-        	 logger.debug("CallAndStoreJob storeProvRowDataToDB - conn rollback SQLException 발생");
+        	 logger.error("CallAndStoreJob storeProvRowDataToDB - conn rollback SQLException 발생");
         	 throw new SQLException(); 
          }           
          finally{
-            if (pstmt != null) try {pstmt.close();pstmt = null;} catch(SQLException ex){ logger.debug("CallAndStoreJob storeProvRowDataToDB() - pstmt close SQLException 발생"); throw new SQLException(); }
-            if (con != null) try {con.close();con = null;} catch(SQLException ex){ logger.debug("CallAndStoreJob storeProvRowDataToDB() - con close SQLException 발생"); throw new SQLException(); }
+            if (pstmt != null) try {pstmt.close();pstmt = null;} catch(SQLException ex){ System.out.println("CallAndStoreJob storeProvRowDataToDB() - pstmt close SQLException 발생"); throw new SQLException(); }
+            if (con != null) try {con.close();con = null;} catch(SQLException ex){ System.out.println("CallAndStoreJob storeProvRowDataToDB() - con close SQLException 발생"); throw new SQLException(); }
          }
       return true;
 	}	
@@ -518,7 +547,7 @@ public class CallAndStoreJob {
 	        this.linkDatBginTm = linkDatBginTm;
 	        this.linkDatEndTm = linkDatEndTm;
 
-			
+	        
 			//설정한 연계주기에 따라 현재 실행하는 시간인지 체크
 			if(checkLinkExecTimeYN(linkCycleHr, lastExcnTm)){
 
@@ -535,7 +564,7 @@ public class CallAndStoreJob {
 							if(provStringData != "5"){ //계속 진행하기 위함 return삭제
 								try{ //전체예외로 안빠지고 계속 진행하기위함
 									storeProvRowDataToDB(getProvDataListByJackson(provStringData));	//파싱해서 적재 									
-							        //this.linkHstNo2 = infoService.selectLinkHstNo("2"); //전역변수용 
+							        //http://localhost:9090/addLink/excn.do?linkDatYmd=2022-06-01&linkDatBginTm=00:00:00&linkDatEndTm=04:00:00nkHstNo2 = infoService.selectLinkHstNo("2"); //전역변수용 
 							        insertProvLinkHst("2", "Y");
 								}
 								catch(StringIndexOutOfBoundsException e){
@@ -545,7 +574,7 @@ public class CallAndStoreJob {
 								}catch(Exception e){
 							    	 //this.linkHstNo2 = infoService.selectLinkHstNo("2"); 
 							         insertProvLinkHst("2", "N"); 
-							         insertLinkErrLog(this.linkHstNo2,"4","CallAndStoreJob excnCallAndStoreJob() 분기점, Exception 발생");
+							         insertLinkErrLog(this.linkHstNo2,"4","CallAndStoreJob excnCallAndStoreJob() 분기점, Exception 발생"+e.getMessage());
 								}
 							}
 						}
@@ -568,11 +597,9 @@ public class CallAndStoreJob {
 						}					
 					}	
 				}else{
-					
 					String provStringData = excnCallProvRowData(1);
 					if(provStringData == "5"){return;}
 					storeProvRowDataToDB(getProvDataListByJackson(provStringData));
-					
 			        //this.linkHstNo2 = infoService.selectLinkHstNo("2"); //전역변수용 
 			        insertProvLinkHst("2", "Y");
 				}
@@ -583,11 +610,11 @@ public class CallAndStoreJob {
 			}
 		}catch(SQLException e){
 	         insertProvLinkHst("2", "N"); 
-	         insertLinkErrLog(this.linkHstNo2,"2","CallAndStoreJob excnCallAndStoreJob() SQLException 발생 "); //+e.getMessage()
+	         insertLinkErrLog(this.linkHstNo2,"2","CallAndStoreJob excnCallAndStoreJob() SQLException 발생 " +e.getMessage()); //+e.getMessage()
 		
 		}catch(ParseException e){
 	         insertProvLinkHst("2", "N"); 
-	         insertLinkErrLog(this.linkHstNo2,"3","CallAndStoreJob excnCallAndStoreJob() ParseException 발생");			
+	         insertLinkErrLog(this.linkHstNo2,"3","CallAndStoreJob excnCallAndStoreJob() ParseException 발생" +e.getMessage());			
 		}
 		catch(StringIndexOutOfBoundsException e){
 	         insertProvLinkHst("2", "N"); 
@@ -595,7 +622,7 @@ public class CallAndStoreJob {
 		}
 		catch(Exception e){
 	         insertProvLinkHst("2", "N"); 
-	         insertLinkErrLog(this.linkHstNo2,"4","CallAndStoreJob excnCallAndStoreJob() Exception 발생"); //+e.getMessage()
+	         insertLinkErrLog(this.linkHstNo2,"4","CallAndStoreJob excnCallAndStoreJob() Exception 발생" +e.getMessage()); //+e.getMessage()
 		}
 	}	
 	
